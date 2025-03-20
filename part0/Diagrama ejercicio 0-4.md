@@ -1,3 +1,5 @@
+Nota : no entendi bien el lenguaje de markdown hice mi mejor intento.
+
 sequenceDiagram
     participant Servidor
     participant Navegador
