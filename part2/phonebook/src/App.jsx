@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useEffect } from "react";
-import axios from "axios";
+import AddNotification from "./components/addNotification";
+import ErrorNotification from "./components/ErrorNotification";
+import personsService from "./services/Persons";
 
 const Filter = ({ value, onChange }) => {
   return (
@@ -36,13 +38,15 @@ const PersonForm = ({
     </>
   );
 };
-
-const Persons = ({ personsToShow }) => {
+const Persons = ({ personsToShow, onDelete }) => {
   return (
     <div>
       {personsToShow.map((person) => (
-        <div key={person.name}>
+        <div key={person.id}>
           {person.name} / {person.phone}
+          <button onClick={() => onDelete(person.id, person.name)}>
+            Delete
+          </button>
         </div>
       ))}
     </div>
@@ -54,16 +58,23 @@ const App = () => {
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [filter, setFilter] = useState("");
+  const [addMessage, setAddMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    console.log("effect");
-    axios.get("http://localhost:3001/persons").then((response) => {
-      console.log("promise fulfilled");
-      setPersons(response.data);
-    });
+    personsService
+      .getAll()
+      .then((response) => {
+        setPersons(response.data);
+      })
+      .catch((error) => {
+        console.log(error);
+        setErrorMessage("Hubo un fallo al recoger los datos del servidor");
+        setTimeout(() => {
+          setErrorMessage(null);
+        }, 5000);
+      });
   }, []);
-
-  console.log("render", persons.length, "notes");
 
   const handleNameChange = (event) => {
     setNewName(event.target.value);
@@ -77,26 +88,105 @@ const App = () => {
     setFilter(event.target.value);
   };
 
+  const deletePerson = (id, name) => {
+    if (window.confirm(`¿Quieres borrar a ${name}?`)) {
+      personsService
+        .remove(id)
+        .then(() => {
+          setPersons(persons.filter((p) => p.id !== id));
+        })
+        .catch((error) => {
+          console.log(error);
+          setErrorMessage("El usuario ya no existe en la bbdd: ");
+          setTimeout(() => {
+            setErrorMessage(null);
+          }, 5000);
+        });
+    }
+  };
+
   const addPerson = (event) => {
     event.preventDefault();
 
-    const alreadyExists = persons.some(
+    const existPerson = persons.find(
       (person) => person.name.toLowerCase() === newName.toLowerCase(),
     );
 
-    if (alreadyExists) {
-      alert(`${newName} is already added to phonebook`);
-      return;
+    if (existPerson) {
+      const phoneExists = existPerson.phone === newPhone;
+      if (phoneExists) {
+        alert("El usuario " + existPerson.name + " ya existe");
+      } else {
+        const pass = window.confirm(
+          "El usuario: " +
+            existPerson.name +
+            " ya existe quieres cambiar el numero: " +
+            existPerson.phone +
+            " al nuevo numero: " +
+            newPhone +
+            " ",
+        );
+
+        if (pass) {
+          const personObject = {
+            name: newName,
+            phone: newPhone,
+          };
+          personsService
+            .update(existPerson.id, personObject)
+            .then((response) => {
+              setPersons(
+                persons.map((p) =>
+                  p.id !== existPerson.id ? p : response.data,
+                ),
+              );
+              setNewName("");
+              setNewPhone("");
+            })
+            .catch((error) => {
+              setPersons(persons.filter((p) => p.id !== existPerson.id));
+              setErrorMessage(
+                "Hubo un fallo al editar a: " +
+                  personObject.name +
+                  " porque ya no existe en la BBDD",
+              );
+              setTimeout(() => {
+                setErrorMessage(null);
+              }, 5000);
+            });
+        }
+        return;
+      }
+    } else {
+      const personObject = {
+        name: newName,
+        phone: newPhone,
+      };
+
+      personsService
+        .create(personObject)
+        .then((response) => {
+          setPersons(persons.concat(response.data));
+          setNewName("");
+          setNewPhone("");
+          setAddMessage(
+            "Se acaba de agregar a: " +
+              personObject.name +
+              " con numero de telefono: " +
+              personObject.phone,
+          );
+          setTimeout(() => {
+            setAddMessage(null);
+          }, 5000);
+        })
+        .catch((error) => {
+          console.log(error);
+          setErrorMessage("Hubo un fallo al crear a: " + personObject.name);
+          setTimeout(() => {
+            setErrorMessage(null);
+          }, 5000);
+        });
     }
-
-    const personObject = {
-      name: newName,
-      phone: newPhone,
-    };
-
-    setPersons([...persons, personObject]);
-    setNewName("");
-    setNewPhone("");
   };
 
   const personsToShow = persons.filter((person) =>
@@ -105,8 +195,9 @@ const App = () => {
 
   return (
     <div>
-      <h2>Phonebook</h2>
-
+      <h1>Phonebook</h1>
+      {addMessage && <AddNotification message={addMessage} />}
+      {errorMessage && <ErrorNotification message={errorMessage} />}
       <Filter value={filter} onChange={handleFilterChange} />
 
       <PersonForm
@@ -118,7 +209,7 @@ const App = () => {
       />
 
       <h2>Numbers</h2>
-      <Persons personsToShow={personsToShow} />
+      <Persons personsToShow={personsToShow} onDelete={deletePerson} />
     </div>
   );
 };
