@@ -1,27 +1,54 @@
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
 const mongoose = require("mongoose");
+const Note = require("./models/Notes");
 
-if (process.argv.length < 3) {
-  console.log("give password as argument");
-  process.exit(1);
-}
+const app = express();
 
-const password = process.argv[2];
+app.use(cors());
+app.use(express.json());
 
-const url = `mongodb+srv://ivanfuenla18:${password}@cluster0.iz5htav.mongodb.net/noteApp?retryWrites=true&w=majority&appName=Cluster0`;
+const url = process.env.MONGODB_URI;
+
+console.log("connecting to", url);
+
 mongoose.set("strictQuery", false);
+mongoose
+  .connect(url)
+  .then(() => console.log("connected to MongoDB"))
+  .catch((error) => console.log("error connecting to MongoDB:", error.message));
 
-mongoose.connect(url);
-
-const noteSchema = new mongoose.Schema({
-  content: String,
-  important: Boolean,
+app.get("/api/notes", (request, response) => {
+  Note.find({}).then((notes) => {
+    response.json(notes);
+  });
 });
 
-const Note = mongoose.model("Note", noteSchema);
-
-Note.find({}).then((result) => {
-  result.forEach((note) => {
-    console.log(note);
+app.get("/api/notes/:id", (request, response) => {
+  Note.findById(request.params.id).then((note) => {
+    response.json(note);
   });
-  mongoose.connection.close();
+});
+
+app.post("/api/notes", (request, response) => {
+  const body = request.body;
+
+  if (body.content === undefined) {
+    return response.status(400).json({ error: "content missing" });
+  }
+
+  const note = new Note({
+    content: body.content,
+    important: body.important || false,
+  });
+
+  note.save().then((savedNote) => {
+    response.json(savedNote);
+  });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

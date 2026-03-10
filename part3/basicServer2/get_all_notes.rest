@@ -1,1 +1,7 @@
-GET http://localhost:3001/api/notes/
+POST  http://localhost:3001/api/notes/
+Content-Type: application/json
+
+{
+  "content": "Esta es una nueva nota desde Postman",
+  "important": true
+}
